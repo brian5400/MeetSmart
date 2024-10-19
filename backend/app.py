@@ -1,15 +1,14 @@
-from flask import Flask, request, jsonify, current_app
+from flask import Flask, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 from datetime import datetime
-from sqlalchemy import text
 
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///meetsmart.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///instance/meetsmart.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 CORS(app)
@@ -38,47 +37,36 @@ def home():
 @app.route('/api/event/create', methods=['POST'])
 def create_event():
     data = request.json
-    print(f"Received data: {data}")  # Add this line
-    new_event = Event(
-        name=data['name'],
-        start_date=datetime.strptime(data['start_date'], '%Y-%m-%d').date(),
-        end_date=datetime.strptime(data['end_date'], '%Y-%m-%d').date(),
-        duration=data['duration'],
-        participants_count=data['participants_count']
-    )
-    print(f"Created event: {new_event}")  # Add this line
-    db.session.add(new_event)
-    db.session.commit()
-
-    # Force a database file sync
-    db.session.execute(text('PRAGMA wal_checkpoint(FULL)'))
+    print(f"Received data: {data}")
     
-    # Get the database connection and call the sync method
-    connection = db.engine.raw_connection()
-    connection.execute(text('PRAGMA wal_checkpoint(FULL)'))
-    connection.close()
-
-    print(f"Event committed to database with id: {new_event.id}")
+    # Validate required fields
+    required_fields = ['name', 'start_date', 'end_date', 'duration', 'participants_count']
+    for field in required_fields:
+        if field not in data or data[field] is None:
+            return jsonify({"error": f"Missing required field: {field}"}), 400
     
-    # Print the database file location
-    db_path = current_app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
-    print(f"Database file location: {os.path.abspath(db_path)}")
-    
-    # Print the number of events in the database
-    event_count = Event.query.count()
-    print(f"Total number of events in database: {event_count}")
-    
-    # Check SQLite journal mode
-    journal_mode = db.session.execute(text('PRAGMA journal_mode')).fetchone()[0]
-    print(f"SQLite journal mode: {journal_mode}")
-    
-    return jsonify({"message": "Event created successfully", "event_id": new_event.id}), 201
+    try:
+        new_event = Event(
+            name=data['name'],
+            start_date=datetime.strptime(data['start_date'], '%Y-%m-%d').date(),
+            end_date=datetime.strptime(data['end_date'], '%Y-%m-%d').date(),
+            duration=int(data['duration']),
+            participants_count=int(data['participants_count'])
+        )
+        db.session.add(new_event)
+        db.session.commit()
+        print(f"Event committed to database with id: {new_event.id}")
+        return jsonify({"message": "Event created successfully", "event_id": new_event.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error creating event: {str(e)}")
+        return jsonify({"error": "Failed to create event"}), 500
 
 @app.route('/api/event/<int:event_id>', methods=['GET'])
 def get_event(event_id):
     event = Event.query.get_or_404(event_id)
     return jsonify({
-        "id": event.id,
+        "eventid": event.id,
         "name": event.name,
         "start_date": event.start_date.isoformat(),
         "end_date": event.end_date.isoformat(),
@@ -105,7 +93,7 @@ def submit_response():
 def get_responses(event_id):
     responses = Response.query.filter_by(event_id=event_id).all()
     return jsonify([{
-        "id": r.id,
+        "response id": r.id,
         "name": r.name,
         "availability": r.availability,
         "preference_gap": r.preference_gap,
@@ -114,7 +102,12 @@ def get_responses(event_id):
     } for r in responses])
 
 if __name__ == '__main__':
+    if not os.path.exists('instance'):
+        os.makedirs('instance')
+
+    db_path = os.path.join('instance', 'meetsmart.db')
+    
     with app.app_context():
         db.create_all()
-    app.run(debug=True, port=5001) 
-    app.run(debug=True)
+
+    app.run(debug=True, port=5001)
