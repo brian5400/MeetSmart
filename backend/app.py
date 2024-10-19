@@ -93,13 +93,104 @@ def submit_response():
 def get_responses(event_id):
     responses = Response.query.filter_by(event_id=event_id).all()
     return jsonify([{
-        "response id": r.id,
+        "response_id": r.id,
         "name": r.name,
         "availability": r.availability,
         "preference_gap": r.preference_gap,
         "preference_time": r.preference_time,
         "preference_day": r.preference_day
     } for r in responses])
+
+def find_common_availability(responses):
+    if not responses:
+        return []
+
+    # Start with the availability of the first responder
+    common_times = set(responses[0].availability)
+
+    # Intersect with the availability of each subsequent responder
+    for response in responses[1:]:
+        common_times.intersection_update(response.availability)
+
+    return list(common_times)
+
+def score_common_times(common_availability, responses):
+    scores = {}
+    
+    # Extract all available times from the common availability structure
+    all_common_times = []
+    for entry in common_availability:
+        all_common_times.extend(entry['times'])  # Flatten the list of times
+
+    for time in all_common_times:
+        total_score = 0
+        
+        # Convert the time string to a datetime object for comparison
+        time_obj = datetime.strptime(time, '%H:%M').time()  # Assuming time is in 'HH:MM' format
+        
+        for response in responses:
+            # Example scoring logic for time preference
+            if response.preference_time == "morning":
+                if time_obj >= datetime.strptime("06:00", '%H:%M').time() and time_obj < datetime.strptime("12:00", '%H:%M').time():
+                    total_score += 1
+            
+            elif response.preference_time == "afternoon":
+                if time_obj >= datetime.strptime("12:00", '%H:%M').time() and time_obj < datetime.strptime("17:00", '%H:%M').time():
+                    total_score += 1
+            
+            elif response.preference_time == "night":
+                if (time_obj >= datetime.strptime("21:00", '%H:%M').time() or time_obj < datetime.strptime("02:00", '%H:%M').time()):
+                    total_score += 1
+            
+            # Scoring logic for day preference
+            # Assuming the date is part of the common availability structure
+            for entry in common_availability:
+                date_str = entry['date']  # Get the date string
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')  # Convert to datetime object
+                
+                # Check if the date is a weekday or weekend
+                if response.preference_day == "weekdays":
+                    if date_obj.weekday() < 5:  # Monday to Friday are weekdays (0-4)
+                        total_score += 1
+                elif response.preference_day == "weekends":
+                    if date_obj.weekday() >= 5:  # Saturday and Sunday are weekends (5-6)
+                        total_score += 1
+            
+            # You can add more scoring criteria based on other preferences
+            
+        scores[time] = total_score
+    
+    return scores
+
+# need to CHANGE AT SOME POINT, IT SHOULD BE WRITING 
+# THE DATA TO THE BEST MEETING TIME DISPLAY RATHER THAN A NEW PAGE
+@app.route('/api/event/common_availability/<int:event_id>', methods=['GET'])
+def common_availability(event_id):
+    responses = Response.query.filter_by(event_id=event_id).all()
+    common_availability = find_common_availability(responses)  # This should return the new JSON format
+    
+    # Calculate scores for each common time
+    scores = score_common_times(common_availability, responses)
+    
+    return jsonify({
+        "common_availability": common_availability,
+        "scores": scores
+    })
+
+@app.route('/api/event/best_time/<int:event_id>', methods=['GET'])
+def best_time(event_id):
+    responses = Response.query.filter_by(event_id=event_id).all()
+    common_availability = find_common_availability(responses)  # Get common availability
+    scores = score_common_times(common_availability, responses)  # Score the common times
+
+    # Find the highest score
+    if scores:
+        max_score = max(scores.values())  # Get the maximum score
+        best_times = [{"time": time, "score": score} for time, score in scores.items() if score == max_score]  # Get all times with the highest score
+    else:
+        best_times = []  # Handle case with no scores
+
+    return jsonify({"best_times": best_times})
 
 if __name__ == '__main__':
     if not os.path.exists('instance'):

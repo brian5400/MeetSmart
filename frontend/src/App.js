@@ -31,7 +31,7 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/create" element={<CreateEvent />} />
             <Route path="/event/:eventId" element={<EventPage />} />
-            <Route path="/response/:eventId" element={<ResponseForm />} />
+            <Route path="event/response/:eventId" element={<ResponseForm />} />
             <Route path="/submitted" element={<SubmittedPage />} />
           </Routes>
         </div>

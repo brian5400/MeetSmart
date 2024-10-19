@@ -8,34 +8,48 @@ function EventPage() {
   const { eventId } = useParams(); // Get the event ID from the URL
   const [eventName, setEventName] = useState(''); // Set the event name dynamically
   const [responseLink, setResponseLink] = useState(''); // Placeholder for response link
-  const [participants, setParticipants] = useState([]); // This will hold participant data
-  const [availability, setAvailability] = useState([]); // Placeholder for member availability
-  const [bestTime, setBestTime] = useState(''); // Placeholder for best meeting time
+  const [participantsCount, setParticipantsCount] = useState(0); // State for participants count
+  const [participants, setParticipants] = useState([]); // State for participants
+  const [availability, setAvailability] = useState([]); // State for availability
+  const [responses, setResponses] = useState([]); // This will hold response data
+  const [bestTimes, setBestTimes] = useState([]); // Updated to hold best meeting times
 
   useEffect(() => {
+    console.log("Event ID:", eventId); // Log the eventId for debugging
+
     // Fetch event details and responses from backend
     const fetchEventDetails = async () => {
-      // This is where you would call your API
-      // For example:
-      // const response = await fetch(`/api/event/${eventId}`); 
-      // const data = await response.json();
+      try {
+        // Fetch event details
+        const eventResponse = await fetch(`/api/event/${eventId}`);
+        const eventData = await eventResponse.json();
 
-      // Mock data for demonstration
-      setEventName('Team Meeting');
-      setResponseLink(`/response/${eventId}`); // Set response link dynamically
-      setParticipants(['Alice', 'Bob', 'Charlie']); // Mock participants
-      setAvailability([
-        { name: 'Alice', availableTimes: ['2024-10-20T10:00:00Z', '2024-10-20T14:00:00Z'] },
-        { name: 'Bob', availableTimes: ['2024-10-20T11:00:00Z'] },
-        { name: 'Charlie', availableTimes: ['2024-10-20T10:00:00Z', '2024-10-20T12:00:00Z'] }
-      ]);
-      setBestTime('2024-10-20T10:00:00Z'); // Mock best time
+        // Set event name and response link
+        setEventName(eventData.name);
+        setResponseLink(`https://localhost:3000/response/${eventId}`); // Set the response link
+        setParticipantsCount(eventData.participants_count); // Set participants count
+        setParticipants(eventData.participants); // Set participants from event data
+        setAvailability(eventData.availability); // Set availability from event data
+
+        // Fetch responses for the event
+        const responseResponse = await fetch(`/api/response/event/${eventId}`);
+        const responseData = await responseResponse.json();
+        setResponses(responseData);
+
+        // Fetch best meeting times
+        const bestTimeResponse = await fetch(`/api/event/best_time/${eventId}`);
+        const bestTimeData = await bestTimeResponse.json();
+        setBestTimes(bestTimeData.best_times);
+      } catch (error) {
+        console.error('Error fetching event details:', error);
+      }
     };
 
     fetchEventDetails();
   }, [eventId]);
 
-  const participationRate = (participants.length / 3) * 100; // Example participation rate calculation
+  // Calculate participation rate based on responses and participants count
+  const participationRate = (responses.length / participantsCount) * 100 || 0;
 
   return (
     <Container>
@@ -44,8 +58,8 @@ function EventPage() {
       </Typography>
       <Typography variant="h6" align="center">
         Share this link to respond: 
-        <Link href={responseLink} target="_blank" rel="noopener">
-          {responseLink}
+        <Link href={`response/${eventId}`} target="_blank" rel="noopener">
+          {`response/${eventId}`}
         </Link>
       </Typography>
       <Typography variant="h6" align="center">
@@ -65,10 +79,16 @@ function EventPage() {
         <Grid item xs={12} sm={6}>
           <Card>
             <CardContent>
-              <Typography variant="h5" align="center">Best Meeting Time</Typography>
-              <Typography variant="h6" align="center">
-                {bestTime ? new Date(bestTime).toLocaleString() : 'N/A'}
-              </Typography>
+              <Typography variant="h5" align="center">Best Meeting Times</Typography>
+              {bestTimes && bestTimes.length > 0 ? (
+                bestTimes.map((timeObj, index) => (
+                  <Typography key={index} variant="h6" align="center">
+                    {new Date(timeObj.time).toLocaleString()} - Score: {timeObj.score}
+                  </Typography>
+                ))
+              ) : (
+                <Typography variant="h6" align="center">No available times</Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
