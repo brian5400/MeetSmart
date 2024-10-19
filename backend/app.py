@@ -14,6 +14,13 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 CORS(app)
 
+"""
+answererName,
+        availabilities,
+        dayPreference,
+        timePreference
+"""
+
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
@@ -147,3 +154,74 @@ if __name__ == '__main__':
         db.create_all()
     app.run(debug=True, port=5001) 
     app.run(debug=True)
+
+
+'''@app.route('/api/event/create', methods=['POST'])
+def create_event():
+    data = request.json
+    required_fields = ['name', 'start_date', 'end_date', 'duration', 'participants_count']
+    
+    # Validate required fields
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"message": f"'{field}' is required."}), 400
+    
+    # Parse and validate dates
+    try:
+        start_date = datetime.strptime(data['start_date'], '%Y-%m-%d').date()
+        end_date = datetime.strptime(data['end_date'], '%Y-%m-%d').date()
+    except ValueError:
+        return jsonify({"message": "Invalid date format. Use 'YYYY-MM-DD'."}), 400
+    
+    if start_date >= end_date:
+        return jsonify({"message": "Start date must be before end date."}), 400
+    
+    # Validate numerical fields
+    try:
+        duration = int(data['duration'])
+        participants_count = int(data['participants_count'])
+        if duration <= 0 or participants_count <= 0:
+            raise ValueError
+    except ValueError:
+        return jsonify({"message": "'duration' and 'participants_count' must be positive integers."}), 400
+    
+    # Check for duplicate event name
+    existing_event = Event.query.filter_by(name=data['name']).first()
+    if existing_event:
+        return jsonify({"message": "An event with this name already exists."}), 400
+    
+    # Create and save the new event
+    new_event = Event(
+        name=data['name'],
+        start_date=start_date,
+        end_date=end_date,
+        duration=duration,
+        participants_count=participants_count
+    )
+    print(f"Created event: {new_event}")  # Debugging
+    db.session.add(new_event)
+    db.session.commit()
+    
+    # Force a database file sync (specific to SQLite)
+    db.session.execute(text('PRAGMA wal_checkpoint(FULL)'))
+    
+    # Get the database connection and call the sync method
+    connection = db.engine.raw_connection()
+    connection.execute(text('PRAGMA wal_checkpoint(FULL)'))
+    connection.close()
+    
+    print(f"Event committed to database with id: {new_event.id}")  # Debugging
+    
+    # Print the database file location
+    db_path = current_app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
+    print(f"Database file location: {os.path.abspath(db_path)}")  # Debugging
+    
+    # Print the number of events in the database
+    event_count = Event.query.count()
+    print(f"Total number of events in database: {event_count}")  # Debugging
+    
+    # Check SQLite journal mode
+    journal_mode = db.session.execute(text('PRAGMA journal_mode')).fetchone()[0]
+    print(f"SQLite journal mode: {journal_mode}")  # Debugging
+    
+    return jsonify({"message": "Event created successfully", "event_id": new_event
