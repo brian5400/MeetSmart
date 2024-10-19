@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { TextField, Button, Container, Typography } from '@mui/material';
+import { TextField, Button, Container, Typography, CircularProgress } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { useNavigate } from 'react-router-dom'; // Import useNavigate
+import { useNavigate } from 'react-router-dom';
 
 function CreateEvent() {
   const [eventName, setEventName] = useState('');
@@ -11,17 +11,35 @@ function CreateEvent() {
   const [endDate, setEndDate] = useState(null);
   const [duration, setDuration] = useState('');
   const [participants, setParticipants] = useState('');
-  const navigate = useNavigate(); // Initialize navigate
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Log event data (you can send this to your backend here)
-    console.log('Event created:', { eventName, startDate, endDate, duration, participants });
+    setIsLoading(true);
+    setError('');
 
-    // Navigate to the event page after creating the event
-    const newEventId = Math.floor(Math.random() * 1000); // Mock event ID for demo
-    navigate(`/event/${newEventId}`);
+    if (!eventName || !startDate || !endDate || !duration || !participants) {
+      setError('Please fill in all fields');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      // Here you would send the data to your backend
+      console.log('Event created:', { eventName, startDate, endDate, duration, participants });
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const newEventId = Math.floor(Math.random() * 1000);
+      navigate(`/event/${newEventId}`);
+    } catch (err) {
+      setError('Failed to create event. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -30,6 +48,7 @@ function CreateEvent() {
         <Typography variant="h2" align="center" gutterBottom>
           Create Event
         </Typography>
+        {error && <Typography color="error">{error}</Typography>}
         <form onSubmit={handleSubmit}>
           <TextField
             fullWidth
@@ -66,8 +85,14 @@ function CreateEvent() {
             onChange={(e) => setParticipants(e.target.value)}
             margin="normal"
           />
-          <Button type="submit" variant="contained" color="primary" fullWidth>
-            Create Event
+          <Button 
+            type="submit" 
+            variant="contained" 
+            color="primary" 
+            fullWidth 
+            disabled={isLoading}
+          >
+            {isLoading ? <CircularProgress size={24} /> : 'Create Event'}
           </Button>
         </form>
       </Container>

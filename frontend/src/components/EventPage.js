@@ -1,41 +1,54 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom'; // Import useParams to get eventId
-import { Container, Typography, Link, Grid, Card, CardContent } from '@mui/material';
-import Calendar from 'react-calendar'; // Ensure react-calendar is installed
-import 'react-calendar/dist/Calendar.css'; // Import calendar styles
+import { useParams } from 'react-router-dom';
+import { Container, Typography, Link, Grid, Card, CardContent, CircularProgress } from '@mui/material';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 
 function EventPage() {
-  const { eventId } = useParams(); // Get the event ID from the URL
-  const [eventName, setEventName] = useState(''); // Set the event name dynamically
-  const [responseLink, setResponseLink] = useState(''); // Placeholder for response link
-  const [participants, setParticipants] = useState([]); // This will hold participant data
-  const [availability, setAvailability] = useState([]); // Placeholder for member availability
-  const [bestTime, setBestTime] = useState(''); // Placeholder for best meeting time
+  const { eventId } = useParams();
+  const [eventName, setEventName] = useState('');
+  const [responseLink, setResponseLink] = useState('');
+  const [participants, setParticipants] = useState([]);
+  const [availability, setAvailability] = useState([]);
+  const [bestTime, setBestTime] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    // Fetch event details and responses from backend
     const fetchEventDetails = async () => {
-      // This is where you would call your API
-      // For example:
-      // const response = await fetch(`/api/event/${eventId}`); 
-      // const data = await response.json();
+      setIsLoading(true);
+      try {
+        // This is where you would call your API
+        // const response = await fetch(`/api/event/${eventId}`);
+        // const data = await response.json();
 
-      // Mock data for demonstration
-      setEventName('Team Meeting');
-      setResponseLink(`/response/${eventId}`); // Set response link dynamically
-      setParticipants(['Alice', 'Bob', 'Charlie']); // Mock participants
-      setAvailability([
-        { name: 'Alice', availableTimes: ['2024-10-20T10:00:00Z', '2024-10-20T14:00:00Z'] },
-        { name: 'Bob', availableTimes: ['2024-10-20T11:00:00Z'] },
-        { name: 'Charlie', availableTimes: ['2024-10-20T10:00:00Z', '2024-10-20T12:00:00Z'] }
-      ]);
-      setBestTime('2024-10-20T10:00:00Z'); // Mock best time
+        // Simulating API call
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Mock data
+        setEventName('Team Meeting');
+        setResponseLink(`${window.location.origin}/response/${eventId}`);
+        setParticipants(['Alice', 'Bob', 'Charlie']);
+        setAvailability([
+          { name: 'Alice', availableTimes: ['2024-10-20T10:00:00Z', '2024-10-20T14:00:00Z'] },
+          { name: 'Bob', availableTimes: ['2024-10-20T11:00:00Z'] },
+          { name: 'Charlie', availableTimes: ['2024-10-20T10:00:00Z', '2024-10-20T12:00:00Z'] }
+        ]);
+        setBestTime('2024-10-20T10:00:00Z');
+      } catch (err) {
+        setError('Failed to fetch event details. Please try again.');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     fetchEventDetails();
   }, [eventId]);
 
-  const participationRate = (participants.length / 3) * 100; // Example participation rate calculation
+  const participationRate = participants.length > 0 ? (participants.length / 3) * 100 : 0;
+
+  if (isLoading) return <CircularProgress />;
+  if (error) return <Typography color="error">{error}</Typography>;
 
   return (
     <Container>
