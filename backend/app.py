@@ -27,8 +27,8 @@ class Response(db.Model):
     name = db.Column(db.String(100), nullable=False)
     availability = db.Column(db.JSON, nullable=False)
     preference_gap = db.Column(db.Integer, nullable=False)
-    preference_time = db.Column(db.String(20), nullable=False)
     preference_day = db.Column(db.String(20), nullable=False)
+    preference_time = db.Column(db.String(20), nullable=False)
 
 @app.route('/')
 def home():

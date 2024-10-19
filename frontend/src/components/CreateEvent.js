@@ -25,7 +25,7 @@ function CreateEvent() {
     };
 
     try {
-      const response = await fetch('/api/event/create', {
+      const response = await fetch('http://localhost:5001/api/event/create', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
