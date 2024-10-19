@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { 
   Container, Typography, TextField, Button, List, ListItem, ListItemText, 
-  IconButton, Radio, RadioGroup, FormControlLabel, FormControl, FormLabel 
+  IconButton, Radio, RadioGroup, FormControlLabel, FormControl, FormLabel, 
+  Snackbar, Alert
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -12,6 +14,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 
 function ResponseForm() {
   const { eventId } = useParams();
+  const navigate = useNavigate();
   const [answererName, setAnswererName] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   const [startTime, setStartTime] = useState(null);
@@ -19,6 +22,8 @@ function ResponseForm() {
   const [availabilities, setAvailabilities] = useState([]);
   const [dayPreference, setDayPreference] = useState('');
   const [timePreference, setTimePreference] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
   const handleAddAvailability = () => {
     if (selectedDate && startTime && endTime) {
@@ -38,10 +43,41 @@ function ResponseForm() {
     setAvailabilities(newAvailabilities);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Form submitted', { answererName, availabilities, dayPreference, timePreference });
-    // We'll add more logic here later
+    if (!answererName || availabilities.length === 0 || !dayPreference || !timePreference) {
+      setSnackbar({ open: true, message: 'Please fill in all required fields', severity: 'error' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const response = await axios.post(`/api/respond/${eventId}`, {
+        answererName,
+        availabilities,
+        dayPreference,
+        timePreference
+      });
+      
+      setSnackbar({ open: true, message: 'Response submitted successfully', severity: 'success' });
+      
+      // Redirect to the submitted page after a short delay
+      setTimeout(() => {
+        navigate(`/submitted/${eventId}`, { state: { submissionData: response.data } });
+      }, 1500);
+    } catch (error) {
+      console.error('Submission error:', error);
+      setSnackbar({ open: true, message: 'Error submitting response. Please try again.', severity: 'error' });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCloseSnackbar = (event, reason) => {
+    if (reason === 'clickaway') {
+      return;
+    }
+    setSnackbar({ ...snackbar, open: false });
   };
 
   return (
@@ -122,10 +158,23 @@ function ResponseForm() {
             </RadioGroup>
           </FormControl>
 
-          <Button type="submit" variant="contained" color="primary" fullWidth style={{ marginTop: '20px' }}>
-            Submit
+          <Button 
+            type="submit" 
+            variant="contained" 
+            color="primary" 
+            fullWidth 
+            style={{ marginTop: '20px' }}
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Submitting...' : 'Submit'}
           </Button>
         </form>
+
+        <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
+          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
       </Container>
     </LocalizationProvider>
   );

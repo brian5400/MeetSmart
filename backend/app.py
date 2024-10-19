@@ -1,8 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, current_app
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
+from datetime import datetime
+from sqlalchemy import text
 
 load_dotenv()
 
@@ -20,6 +22,23 @@ class Event(db.Model):
     duration = db.Column(db.Integer, nullable=False)
     participants_count = db.Column(db.Integer, nullable=False)
 
+    # Relationship to Response
+    responses = db.relationship('Response', backref='event', lazy=True, cascade="all, delete-orphan")
+    
+    def to_dict(self):
+        participation_rate = (len(self.responses) / self.participants_count) * 100 if self.participants_count else 0
+        return {
+            "id": self.id,
+            "name": self.name,
+            "start_date": self.start_date.isoformat(),
+            "end_date": self.end_date.isoformat(),
+            "duration": self.duration,
+            "participants_count": self.participants_count,
+            "best_time": self.best_time,
+            "created_at": self.created_at.isoformat(),
+            "participation_rate": f"{participation_rate:.2f}%"
+        }
+
 class Response(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     event_id = db.Column(db.Integer, db.ForeignKey('event.id'), nullable=False)
@@ -29,18 +48,59 @@ class Response(db.Model):
     preference_time = db.Column(db.String(20), nullable=False)
     preference_day = db.Column(db.String(20), nullable=False)
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "event_id": self.event_id,
+            "name": self.name,
+            "availability": self.availability,
+            "preference_gap": self.preference_gap,
+            "preference_time": self.preference_time,
+            "preference_day": self.preference_day,
+            "submitted_at": self.submitted_at.isoformat()
+        }
+
+@app.route('/')
+def home():
+    return "Welcome to MeetSmart API"
+
 @app.route('/api/event/create', methods=['POST'])
 def create_event():
     data = request.json
+    print(f"Received data: {data}")  # Add this line
     new_event = Event(
         name=data['name'],
-        start_date=data['start_date'],
-        end_date=data['end_date'],
+        start_date=datetime.strptime(data['start_date'], '%Y-%m-%d').date(),
+        end_date=datetime.strptime(data['end_date'], '%Y-%m-%d').date(),
         duration=data['duration'],
         participants_count=data['participants_count']
     )
+    print(f"Created event: {new_event}")  # Add this line
     db.session.add(new_event)
     db.session.commit()
+
+    # Force a database file sync
+    db.session.execute(text('PRAGMA wal_checkpoint(FULL)'))
+    
+    # Get the database connection and call the sync method
+    connection = db.engine.raw_connection()
+    connection.execute(text('PRAGMA wal_checkpoint(FULL)'))
+    connection.close()
+
+    print(f"Event committed to database with id: {new_event.id}")
+    
+    # Print the database file location
+    db_path = current_app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
+    print(f"Database file location: {os.path.abspath(db_path)}")
+    
+    # Print the number of events in the database
+    event_count = Event.query.count()
+    print(f"Total number of events in database: {event_count}")
+    
+    # Check SQLite journal mode
+    journal_mode = db.session.execute(text('PRAGMA journal_mode')).fetchone()[0]
+    print(f"SQLite journal mode: {journal_mode}")
+    
     return jsonify({"message": "Event created successfully", "event_id": new_event.id}), 201
 
 @app.route('/api/event/<int:event_id>', methods=['GET'])
@@ -85,4 +145,5 @@ def get_responses(event_id):
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+    app.run(debug=True, port=5001) 
     app.run(debug=True)
