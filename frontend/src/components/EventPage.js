@@ -9,35 +9,28 @@ function EventPage() {
   const [eventName, setEventName] = useState(''); // Set the event name dynamically
   const [responseLink, setResponseLink] = useState(''); // Placeholder for response link
   const [participantsCount, setParticipantsCount] = useState(0); // State for participants count
-  const [participants, setParticipants] = useState([]); // State for participants
-  const [availability, setAvailability] = useState([]); // State for availability
   const [responses, setResponses] = useState([]); // This will hold response data
   const [bestTimes, setBestTimes] = useState([]); // Updated to hold best meeting times
 
   useEffect(() => {
-    console.log("Event ID:", eventId); // Log the eventId for debugging
-
-    // Fetch event details and responses from backend
     const fetchEventDetails = async () => {
       try {
         // Fetch event details
-        const eventResponse = await fetch(`/api/event/${eventId}`);
+        const eventResponse = await fetch(`http://localhost:5001/api/event/${eventId}`);
         const eventData = await eventResponse.json();
 
         // Set event name and response link
         setEventName(eventData.name);
         setResponseLink(`https://localhost:3000/response/${eventId}`); // Set the response link
         setParticipantsCount(eventData.participants_count); // Set participants count
-        setParticipants(eventData.participants); // Set participants from event data
-        setAvailability(eventData.availability); // Set availability from event data
 
         // Fetch responses for the event
-        const responseResponse = await fetch(`/api/response/event/${eventId}`);
+        const responseResponse = await fetch(`http://localhost:5001/api/response/event/${eventId}`);
         const responseData = await responseResponse.json();
-        setResponses(responseData);
+        setResponses(responseData.responses); // Set the responses
 
         // Fetch best meeting times
-        const bestTimeResponse = await fetch(`/api/event/best_time/${eventId}`);
+        const bestTimeResponse = await fetch(`http://localhost:5001/api/event/best_time/${eventId}`);
         const bestTimeData = await bestTimeResponse.json();
         setBestTimes(bestTimeData.best_times);
       } catch (error) {
@@ -48,8 +41,11 @@ function EventPage() {
     fetchEventDetails();
   }, [eventId]);
 
-  // Calculate participation rate based on responses and participants count
-  const participationRate = (responses.length / participantsCount) * 100 || 0;
+  // Calculate participation rate based on responses count and participants count
+  console.log("Participants Count:", participantsCount);  // Log the participants count
+  console.log("Responses Count:", responses.length);  // Log the number of responses  
+
+  const participationRate = participantsCount > 0 ? (responses.length / participantsCount) * 100 : 0;
 
   return (
     <Container>

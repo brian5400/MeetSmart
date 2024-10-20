@@ -71,7 +71,7 @@ def get_event(event_id):
         "start_date": event.start_date.isoformat(),
         "end_date": event.end_date.isoformat(),
         "duration": event.duration,
-        "participants_count": event.participants_count
+        "participants_count": event.participants_count  # Ensure this is included
     })
 
 @app.route('/api/response/submit', methods=['POST'])
@@ -92,14 +92,18 @@ def submit_response():
 @app.route('/api/response/event/<int:event_id>', methods=['GET'])
 def get_responses(event_id):
     responses = Response.query.filter_by(event_id=event_id).all()
-    return jsonify([{
-        "response_id": r.id,
-        "name": r.name,
-        "availability": r.availability,
-        "preference_gap": r.preference_gap,
-        "preference_time": r.preference_time,
-        "preference_day": r.preference_day
-    } for r in responses])
+    response_count = len(responses)  # Count the number of responses
+    return jsonify({
+        "responses": [{
+            "response_id": r.id,
+            "name": r.name,
+            "availability": r.availability,
+            "preference_gap": r.preference_gap,
+            "preference_time": r.preference_time,
+            "preference_day": r.preference_day
+        } for r in responses],
+        "response_count": response_count  # Return the count of responses
+    })
 
 def find_common_availability(responses):
     if not responses:
@@ -137,6 +141,10 @@ def score_common_times(common_availability, responses):
             elif response.preference_time == "afternoon":
                 if time_obj >= datetime.strptime("12:00", '%H:%M').time() and time_obj < datetime.strptime("17:00", '%H:%M').time():
                     total_score += 1
+            
+            elif response.preference_time == "evening":
+                if time_obj >= datetime.strptime("17:00", '%H:%M').time() and time_obj < datetime.strptime("21:00", '%H:%M').time():
+                    total_score += 1 
             
             elif response.preference_time == "night":
                 if (time_obj >= datetime.strptime("21:00", '%H:%M').time() or time_obj < datetime.strptime("02:00", '%H:%M').time()):
