@@ -1,35 +1,45 @@
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom'; // Import useParams to get eventId
+import { useParams } from 'react-router-dom';
 import { Container, Typography, Link, Grid, Card, CardContent } from '@mui/material';
-import Calendar from 'react-calendar'; // Ensure react-calendar is installed
-import 'react-calendar/dist/Calendar.css'; // Import calendar styles
+import { Calendar, momentLocalizer } from 'react-big-calendar';
+import moment from 'moment';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
+
+const localizer = momentLocalizer(moment);
 
 function EventPage() {
-  const { eventId } = useParams(); // Get the event ID from the URL
-  const [eventName, setEventName] = useState(''); // Set the event name dynamically
-  const [responseLink, setResponseLink] = useState(''); // Placeholder for response link
-  const [participantsCount, setParticipantsCount] = useState(0); // State for participants count
-  const [responses, setResponses] = useState([]); // This will hold response data
-  const [bestTimes, setBestTimes] = useState([]); // Updated to hold best meeting times
+  const { eventId } = useParams();
+  const [eventName, setEventName] = useState('');
+  const [responseLink, setResponseLink] = useState('');
+  const [participantsCount, setParticipantsCount] = useState(0);
+  const [responses, setResponses] = useState([]);
+  const [bestTimes, setBestTimes] = useState([]);
+  const [events, setEvents] = useState([]);
 
   useEffect(() => {
     const fetchEventDetails = async () => {
       try {
-        // Fetch event details
         const eventResponse = await fetch(`http://localhost:5001/api/event/${eventId}`);
         const eventData = await eventResponse.json();
 
-        // Set event name and response link
         setEventName(eventData.name);
-        setResponseLink(`https://localhost:3000/response/${eventId}`); // Set the response link
-        setParticipantsCount(eventData.participants_count); // Set participants count
+        setResponseLink(`https://localhost:3000/response/${eventId}`);
+        setParticipantsCount(eventData.participants_count);
 
-        // Fetch responses for the event
         const responseResponse = await fetch(`http://localhost:5001/api/response/event/${eventId}`);
         const responseData = await responseResponse.json();
-        setResponses(responseData.responses); // Set the responses
+        setResponses(responseData.responses);
 
-        // Fetch best meeting times
+        // Map responses to calendar events
+        const mappedEvents = responseData.responses.flatMap((response) => 
+          response.availability.map((slot) => ({
+            start: new Date(`${slot.date}T${slot.startTime}`),
+            end: new Date(`${slot.date}T${slot.endTime}`),
+            title: `${response.name} is available`,
+          }))
+        );
+        setEvents(mappedEvents);
+
         const bestTimeResponse = await fetch(`http://localhost:5001/api/event/best_time/${eventId}`);
         const bestTimeData = await bestTimeResponse.json();
         setBestTimes(bestTimeData.best_times);
@@ -40,10 +50,6 @@ function EventPage() {
 
     fetchEventDetails();
   }, [eventId]);
-
-  // Calculate participation rate based on responses count and participants count
-  console.log("Participants Count:", participantsCount);  // Log the participants count
-  console.log("Responses Count:", responses.length);  // Log the number of responses  
 
   const participationRate = participantsCount > 0 ? (responses.length / participantsCount) * 100 : 0;
 
@@ -66,29 +72,37 @@ function EventPage() {
         <Grid item xs={12} sm={6}>
           <Card>
             <CardContent>
-              <Typography variant="h5" align="center">Availability Calendar</Typography>
-              <Calendar />
+              <Typography variant="h5" align="center">Availability Calendar (Week View)</Typography>
+              <Calendar
+                localizer={localizer}
+                events={events}
+                startAccessor="start"
+                endAccessor="end"
+                defaultView="week"
+                views={['week']}
+                style={{ height: 500 }}
+              />
             </CardContent>
           </Card>
         </Grid>
         
         <Grid item xs={12} sm={6}>
           <Card>
-          <CardContent>
-            <Typography variant="h5" align="center">Best Meeting Times</Typography>
-            {bestTimes && bestTimes.length > 0 ? (
-              bestTimes.map((timeObj, index) => {
-               const [startTime, endTime] = timeObj.time.split('~');
-               return (
-                <Typography key={index} variant="h6" align="center">
-                    {new Date(startTime).toLocaleString()} - {new Date(endTime).toLocaleString()} - Score: {timeObj.score}
-                </Typography>
-              );
-             })
-           ) : (
-           <Typography variant="h6" align="center">No available times</Typography>
-           )}
-          </CardContent>
+            <CardContent>
+              <Typography variant="h5" align="center">Best Meeting Times</Typography>
+              {bestTimes && bestTimes.length > 0 ? (
+                bestTimes.map((timeObj, index) => {
+                  const [startTime, endTime] = timeObj.time.split('~');
+                  return (
+                    <Typography key={index} variant="h6" align="center">
+                      {new Date(startTime).toLocaleString()} - {new Date(endTime).toLocaleString()} - Score: {timeObj.score}
+                    </Typography>
+                  );
+                })
+              ) : (
+                <Typography variant="h6" align="center">No available times</Typography>
+              )}
+            </CardContent>
           </Card>
         </Grid>
       </Grid>
