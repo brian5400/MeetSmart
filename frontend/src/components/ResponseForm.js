@@ -60,42 +60,63 @@ function ResponseForm() {
     const newAvailabilities = availabilities.filter((_, i) => i !== index);
     setAvailabilities(newAvailabilities);
   };
+  const formatDate = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatTime = (date) => {
+    const d = new Date(date);
+    return d.toTimeString().split(' ')[0];
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!answererName || availabilities.length === 0 || !dayPreference || !timePreference) {
-      setSnackbar({ open: true, message: 'Please fill in all required fields', severity: 'error' });
-      return;
+        setSnackbar({ open: true, message: 'Please fill in all required fields', severity: 'error' });
+        return;
     }
 
     setIsSubmitting(true);
-    try {
-      const response = await axios.post(`http://localhost:5001/api/response/submit`, {
+    const formattedAvailabilities = availabilities.map(av => ({
+        date: formatDate(av.date),
+        startTime: `${formatDate(av.date)} ${formatTime(av.startTime)}`,
+        endTime: `${formatDate(av.date)} ${formatTime(av.endTime)}`
+    }));
+
+    const responseData = {
         event_id: eventId,
         name: answererName,
-        availability: availabilities,
+        availability: formattedAvailabilities,
         preference_gap: 0,
         preference_day: dayPreference,
         preference_time: timePreference
-      }, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      setSnackbar({ open: true, message: 'Response submitted successfully', severity: 'success' });
-      
-      // Redirect to the submitted page after a short delay
-      setTimeout(() => {
-        navigate(`/submitted/${eventId}`, { state: { submissionData: response.data } });
-      }, 1500);
+    };
+
+    console.log("Submitting response data:", responseData);  // Add this line for debugging
+
+    try {
+        const response = await axios.post(`http://localhost:5001/api/response/submit`, responseData, {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        setSnackbar({ open: true, message: 'Response submitted successfully', severity: 'success' });
+        
+        setTimeout(() => {
+            navigate(`/submitted/${eventId}`, { state: { submissionData: response.data } });
+        }, 1500);
     } catch (error) {
-      console.error('Submission error:', error);
-      setSnackbar({ open: true, message: 'Error submitting response. Please try again.', severity: 'error' });
+        console.error('Submission error:', error);
+        setSnackbar({ open: true, message: 'Error submitting response. Please try again.', severity: 'error' });
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
-  };
+};
 
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') {

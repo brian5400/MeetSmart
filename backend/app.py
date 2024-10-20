@@ -4,6 +4,7 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta, timezone
+from dateutil import parser
 
 load_dotenv()
 
@@ -83,19 +84,14 @@ def submit_response():
         # Process the availability data
         processed_availability = []
         for slot in data['availability']:
-            date = slot['date']
-            # Parse the ISO 8601 format times
-            start_time = datetime.fromisoformat(slot['startTime'].replace('Z', '+00:00'))
-            end_time = datetime.fromisoformat(slot['endTime'].replace('Z', '+00:00'))
-            
-            # Convert to UTC if not already
-            start_time = start_time.astimezone(timezone.utc)
-            end_time = end_time.astimezone(timezone.utc)
+            # Parse the date and time strings
+            start_datetime = datetime.strptime(slot['startTime'], "%Y-%m-%d %H:%M:%S")
+            end_datetime = datetime.strptime(slot['endTime'], "%Y-%m-%d %H:%M:%S")
             
             processed_availability.append({
-                'date': date,
-                'startTime': start_time.strftime("%H:%M:%S"),
-                'endTime': end_time.strftime("%H:%M:%S")
+                'date': start_datetime.date().isoformat(),
+                'startTime': start_datetime.time().isoformat(),
+                'endTime': end_datetime.time().isoformat()
             })
 
         new_response = Response(
@@ -136,19 +132,15 @@ def get_responses(event_id):
     })
 
 def find_common_availability(responses, event_duration):
-    print(f"Finding common availability for {len(responses)} responses with event duration {event_duration} minutes")
     if not responses:
-        print("No responses found")
         return []
 
     availability_by_date = {}
-    for i, response in enumerate(responses):
-        print(f"Processing response {i+1}:")
+    for response in responses:
         for slot in response.availability:
-            print(f"  Slot: {slot}")
-            date = datetime.strptime(slot['date'], "%Y-%m-%d").date()
-            start = datetime.strptime(f"{slot['date']}T{slot['startTime']}", "%Y-%m-%dT%H:%M:%S")
-            end = datetime.strptime(f"{slot['date']}T{slot['endTime']}", "%Y-%m-%dT%H:%M:%S")
+            date = slot['date']
+            start = datetime.strptime(f"{date} {slot['startTime']}", "%Y-%m-%d %H:%M:%S")
+            end = datetime.strptime(f"{date} {slot['endTime']}", "%Y-%m-%d %H:%M:%S")
             
             if date not in availability_by_date:
                 availability_by_date[date] = []
@@ -156,35 +148,31 @@ def find_common_availability(responses, event_duration):
 
     common_times = []
     for date, slots in availability_by_date.items():
-        print(f"Processing date {date}:")
         slots.sort(key=lambda x: x[0])
         
         overlap_start = max(slot[0] for slot in slots)
         overlap_end = min(slot[1] for slot in slots)
-        print(f"  Overlap: {overlap_start} to {overlap_end}")
         
-        if overlap_end - overlap_start >= timedelta(minutes=event_duration):
-            current = overlap_start
-            while current + timedelta(minutes=event_duration) <= overlap_end:
-                common_times.append(current)
-                current += timedelta(minutes=15)
+        current = overlap_start
+        while current + timedelta(minutes=event_duration) <= overlap_end:
+            common_times.append((current, current + timedelta(minutes=event_duration)))
+            current += timedelta(minutes=15)  # 15-minute intervals
 
-    print(f"Found {len(common_times)} common time slots")
     return common_times
 
-def score_common_times(common_times, responses, event_duration):
+def score_common_times(common_times, responses):
     scores = {}
-    for time in common_times:
+    for start_time, end_time in common_times:
         score = 0
         for response in responses:
             # Day preference
-            if response.preference_day == "weekdays" and time.weekday() < 5:
+            if response.preference_day == "weekdays" and start_time.weekday() < 5:
                 score += 1
-            elif response.preference_day == "weekends" and time.weekday() >= 5:
+            elif response.preference_day == "weekends" and start_time.weekday() >= 5:
                 score += 1
 
             # Time preference
-            hour = time.hour
+            hour = start_time.hour
             if response.preference_time == "morning" and 6 <= hour < 12:
                 score += 1
             elif response.preference_time == "afternoon" and 12 <= hour < 17:
@@ -194,15 +182,7 @@ def score_common_times(common_times, responses, event_duration):
             elif response.preference_time == "night" and (21 <= hour or hour < 2):
                 score += 1
 
-            # Check if the entire event duration fits within the preferred time
-            event_end = time + timedelta(minutes=event_duration)
-            if (response.preference_time == "morning" and event_end.hour < 12) or \
-               (response.preference_time == "afternoon" and 12 <= event_end.hour < 17) or \
-               (response.preference_time == "evening" and 17 <= event_end.hour < 21) or \
-               (response.preference_time == "night" and (21 <= event_end.hour or event_end.hour < 2)):
-                score += 1
-
-        scores[time] = score
+        scores[(start_time, end_time)] = score
 
     return scores
 
@@ -229,24 +209,25 @@ def best_time(event_id):
     print(f"Event: {event.name}, Duration: {event.duration}")
     print(f"Number of responses: {len(responses)}")
     
-    for i, response in enumerate(responses):
-        print(f"Response {i+1}:")
-        print(f"  Name: {response.name}")
-        print(f"  Availability: {response.availability}")
-        print(f"  Day Preference: {response.preference_day}")
-        print(f"  Time Preference: {response.preference_time}")
-    
     common_times = find_common_availability(responses, event.duration)
+    print(f"Common times found: {len(common_times)}")
     
     if not common_times:
         return jsonify({"message": "No common available times found", "best_times": []}), 200
     
-    scores = score_common_times(common_times, responses, event.duration)
+    scores = score_common_times(common_times, responses)
     
     if scores:
         max_score = max(scores.values())
-        best_times = [{"time": time.isoformat(), "score": score} for time, score in scores.items() if score == max_score]
-        best_times.sort(key=lambda x: x['time'])
+        best_times = [
+            {
+                "time": f"{start_time.strftime('%Y-%m-%d %H:%M')}~{end_time.strftime('%Y-%m-%d %H:%M')}",
+                "score": score
+            }
+            for (start_time, end_time), score in scores.items()
+            if score == max_score
+        ]
+        best_times.sort(key=lambda x: x['time'])  # Sort by time
     else:
         best_times = []
 
