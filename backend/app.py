@@ -3,7 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
 from dotenv import load_dotenv
 import os
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 
@@ -77,17 +77,47 @@ def get_event(event_id):
 @app.route('/api/response/submit', methods=['POST'])
 def submit_response():
     data = request.json
-    new_response = Response(
-        event_id=data['event_id'],
-        name=data['name'],
-        availability=data['availability'],
-        preference_gap=data['preference_gap'],
-        preference_time=data['preference_time'],
-        preference_day=data['preference_day']
-    )
-    db.session.add(new_response)
-    db.session.commit()
-    return jsonify({"message": "Response submitted successfully"}), 201
+    print("Received response data:", data)  # Debug print
+
+    try:
+        # Process the availability data
+        processed_availability = []
+        for slot in data['availability']:
+            date = slot['date']
+            # Parse the ISO 8601 format times
+            start_time = datetime.fromisoformat(slot['startTime'].replace('Z', '+00:00'))
+            end_time = datetime.fromisoformat(slot['endTime'].replace('Z', '+00:00'))
+            
+            # Convert to UTC if not already
+            start_time = start_time.astimezone(timezone.utc)
+            end_time = end_time.astimezone(timezone.utc)
+            
+            processed_availability.append({
+                'date': date,
+                'startTime': start_time.strftime("%H:%M:%S"),
+                'endTime': end_time.strftime("%H:%M:%S")
+            })
+
+        new_response = Response(
+            event_id=data['event_id'],
+            name=data['name'],
+            availability=processed_availability,
+            preference_gap=data['preference_gap'],
+            preference_day=data['preference_day'],
+            preference_time=data['preference_time']
+        )
+        db.session.add(new_response)
+        db.session.commit()
+
+        print("Saved response:", new_response.availability)  # Debug print
+        print("Response ID:", new_response.id)  # Print the ID of the saved response
+
+        return jsonify({"message": "Response submitted successfully", "response_id": new_response.id}), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print("Error saving response:", str(e))  # Debug print
+        return jsonify({"error": "Failed to save response", "details": str(e)}), 500
 
 @app.route('/api/response/event/<int:event_id>', methods=['GET'])
 def get_responses(event_id):
@@ -105,69 +135,75 @@ def get_responses(event_id):
         "response_count": response_count  # Return the count of responses
     })
 
-def find_common_availability(responses):
+def find_common_availability(responses, event_duration):
+    print(f"Finding common availability for {len(responses)} responses with event duration {event_duration} minutes")
     if not responses:
+        print("No responses found")
         return []
 
-    # Start with the availability of the first responder
-    common_times = set(responses[0].availability)
+    availability_by_date = {}
+    for i, response in enumerate(responses):
+        print(f"Processing response {i+1}:")
+        for slot in response.availability:
+            print(f"  Slot: {slot}")
+            date = datetime.strptime(slot['date'], "%Y-%m-%d").date()
+            start = datetime.strptime(f"{slot['date']}T{slot['startTime']}", "%Y-%m-%dT%H:%M:%S")
+            end = datetime.strptime(f"{slot['date']}T{slot['endTime']}", "%Y-%m-%dT%H:%M:%S")
+            
+            if date not in availability_by_date:
+                availability_by_date[date] = []
+            availability_by_date[date].append((start, end))
 
-    # Intersect with the availability of each subsequent responder
-    for response in responses[1:]:
-        common_times.intersection_update(response.availability)
+    common_times = []
+    for date, slots in availability_by_date.items():
+        print(f"Processing date {date}:")
+        slots.sort(key=lambda x: x[0])
+        
+        overlap_start = max(slot[0] for slot in slots)
+        overlap_end = min(slot[1] for slot in slots)
+        print(f"  Overlap: {overlap_start} to {overlap_end}")
+        
+        if overlap_end - overlap_start >= timedelta(minutes=event_duration):
+            current = overlap_start
+            while current + timedelta(minutes=event_duration) <= overlap_end:
+                common_times.append(current)
+                current += timedelta(minutes=15)
 
-    return list(common_times)
+    print(f"Found {len(common_times)} common time slots")
+    return common_times
 
-def score_common_times(common_availability, responses):
+def score_common_times(common_times, responses, event_duration):
     scores = {}
-    
-    # Extract all available times from the common availability structure
-    all_common_times = []
-    for entry in common_availability:
-        all_common_times.extend(entry['times'])  # Flatten the list of times
-
-    for time in all_common_times:
-        total_score = 0
-        
-        # Convert the time string to a datetime object for comparison
-        time_obj = datetime.strptime(time, '%H:%M').time()  # Assuming time is in 'HH:MM' format
-        
+    for time in common_times:
+        score = 0
         for response in responses:
-            # Example scoring logic for time preference
-            if response.preference_time == "morning":
-                if time_obj >= datetime.strptime("06:00", '%H:%M').time() and time_obj < datetime.strptime("12:00", '%H:%M').time():
-                    total_score += 1
-            
-            elif response.preference_time == "afternoon":
-                if time_obj >= datetime.strptime("12:00", '%H:%M').time() and time_obj < datetime.strptime("17:00", '%H:%M').time():
-                    total_score += 1
-            
-            elif response.preference_time == "evening":
-                if time_obj >= datetime.strptime("17:00", '%H:%M').time() and time_obj < datetime.strptime("21:00", '%H:%M').time():
-                    total_score += 1 
-            
-            elif response.preference_time == "night":
-                if (time_obj >= datetime.strptime("21:00", '%H:%M').time() or time_obj < datetime.strptime("02:00", '%H:%M').time()):
-                    total_score += 1
-            
-            # Scoring logic for day preference
-            # Assuming the date is part of the common availability structure
-            for entry in common_availability:
-                date_str = entry['date']  # Get the date string
-                date_obj = datetime.strptime(date_str, '%Y-%m-%d')  # Convert to datetime object
-                
-                # Check if the date is a weekday or weekend
-                if response.preference_day == "weekdays":
-                    if date_obj.weekday() < 5:  # Monday to Friday are weekdays (0-4)
-                        total_score += 1
-                elif response.preference_day == "weekends":
-                    if date_obj.weekday() >= 5:  # Saturday and Sunday are weekends (5-6)
-                        total_score += 1
-            
-            # You can add more scoring criteria based on other preferences
-            
-        scores[time] = total_score
-    
+            # Day preference
+            if response.preference_day == "weekdays" and time.weekday() < 5:
+                score += 1
+            elif response.preference_day == "weekends" and time.weekday() >= 5:
+                score += 1
+
+            # Time preference
+            hour = time.hour
+            if response.preference_time == "morning" and 6 <= hour < 12:
+                score += 1
+            elif response.preference_time == "afternoon" and 12 <= hour < 17:
+                score += 1
+            elif response.preference_time == "evening" and 17 <= hour < 21:
+                score += 1
+            elif response.preference_time == "night" and (21 <= hour or hour < 2):
+                score += 1
+
+            # Check if the entire event duration fits within the preferred time
+            event_end = time + timedelta(minutes=event_duration)
+            if (response.preference_time == "morning" and event_end.hour < 12) or \
+               (response.preference_time == "afternoon" and 12 <= event_end.hour < 17) or \
+               (response.preference_time == "evening" and 17 <= event_end.hour < 21) or \
+               (response.preference_time == "night" and (21 <= event_end.hour or event_end.hour < 2)):
+                score += 1
+
+        scores[time] = score
+
     return scores
 
 # need to CHANGE AT SOME POINT, IT SHOULD BE WRITING 
@@ -187,17 +223,34 @@ def common_availability(event_id):
 
 @app.route('/api/event/best_time/<int:event_id>', methods=['GET'])
 def best_time(event_id):
+    event = Event.query.get_or_404(event_id)
     responses = Response.query.filter_by(event_id=event_id).all()
-    common_availability = find_common_availability(responses)  # Get common availability
-    scores = score_common_times(common_availability, responses)  # Score the common times
-
-    # Find the highest score
+    
+    print(f"Event: {event.name}, Duration: {event.duration}")
+    print(f"Number of responses: {len(responses)}")
+    
+    for i, response in enumerate(responses):
+        print(f"Response {i+1}:")
+        print(f"  Name: {response.name}")
+        print(f"  Availability: {response.availability}")
+        print(f"  Day Preference: {response.preference_day}")
+        print(f"  Time Preference: {response.preference_time}")
+    
+    common_times = find_common_availability(responses, event.duration)
+    
+    if not common_times:
+        return jsonify({"message": "No common available times found", "best_times": []}), 200
+    
+    scores = score_common_times(common_times, responses, event.duration)
+    
     if scores:
-        max_score = max(scores.values())  # Get the maximum score
-        best_times = [{"time": time, "score": score} for time, score in scores.items() if score == max_score]  # Get all times with the highest score
+        max_score = max(scores.values())
+        best_times = [{"time": time.isoformat(), "score": score} for time, score in scores.items() if score == max_score]
+        best_times.sort(key=lambda x: x['time'])
     else:
-        best_times = []  # Handle case with no scores
+        best_times = []
 
+    print(f"Best times found: {len(best_times)}")
     return jsonify({"best_times": best_times})
 
 if __name__ == '__main__':

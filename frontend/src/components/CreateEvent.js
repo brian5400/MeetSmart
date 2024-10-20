@@ -25,6 +25,7 @@ function CreateEvent() {
     };
 
     try {
+      console.log('Sending request to create event...'); // Debug log
       const response = await fetch('http://localhost:5001/api/event/create', {
         method: 'POST',
         headers: {
@@ -41,6 +42,7 @@ function CreateEvent() {
       console.log('Event created:', result);
 
       // Navigate to the event page after creating the event
+      console.log(`Navigating to /event/${result.event_id}`); // Debug log
       navigate(`/event/${result.event_id}`);
     } catch (error) {
       console.error('Error creating event:', error);

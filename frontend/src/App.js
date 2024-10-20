@@ -32,7 +32,7 @@ function App() {
             <Route path="/create" element={<CreateEvent />} />
             <Route path="/event/:eventId" element={<EventPage />} />
             <Route path="event/response/:eventId" element={<ResponseForm />} />
-            <Route path="/submitted" element={<SubmittedPage />} />
+            <Route path="/submitted/:eventId" element={<SubmittedPage />} />
           </Routes>
         </div>
       </Router>
