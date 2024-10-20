@@ -135,29 +135,49 @@ def find_common_availability(responses, event_duration):
     if not responses:
         return []
 
-    availability_by_date = {}
+    # Collect all available time slots from different users
+    all_slots = []
     for response in responses:
         for slot in response.availability:
             date = slot['date']
             start = datetime.strptime(f"{date} {slot['startTime']}", "%Y-%m-%d %H:%M:%S")
             end = datetime.strptime(f"{date} {slot['endTime']}", "%Y-%m-%d %H:%M:%S")
-            
-            if date not in availability_by_date:
-                availability_by_date[date] = []
-            availability_by_date[date].append((start, end))
+            all_slots.append((start, end))
+
+    print("All slots:", all_slots)  # Debugging output
 
     common_times = []
-    for date, slots in availability_by_date.items():
-        slots.sort(key=lambda x: x[0])
-        
-        overlap_start = max(slot[0] for slot in slots)
-        overlap_end = min(slot[1] for slot in slots)
-        
-        current = overlap_start
-        while current + timedelta(minutes=event_duration) <= overlap_end:
-            common_times.append((current, current + timedelta(minutes=event_duration)))
-            current += timedelta(minutes=15)  # 15-minute intervals
+    if not all_slots:
+        return common_times
 
+    # Sort all slots by start time
+    all_slots.sort(key=lambda x: x[0])
+
+    # Use a list to keep track of overlapping slots
+    overlap_start = all_slots[0][0]
+    overlap_end = all_slots[0][1]
+
+    for start, end in all_slots[1:]:
+        # Check if the current slot overlaps with the ongoing overlap
+        if start <= overlap_end:  # There is an overlap
+            overlap_start = max(overlap_start, start)  # Update the start of overlap
+            overlap_end = min(overlap_end, end)        # Update the end of overlap
+        else:
+            # When there's no overlap, check the current overlapping slot
+            while overlap_start + timedelta(minutes=event_duration) <= overlap_end:
+                common_times.append((overlap_start, overlap_start + timedelta(minutes=event_duration)))
+                overlap_start += timedelta(minutes=10)  # Move to next interval
+
+            # Move to the next interval
+            overlap_start = start
+            overlap_end = end
+
+    # Final check for the last overlapping slot
+    while overlap_start + timedelta(minutes=event_duration) <= overlap_end:
+        common_times.append((overlap_start, overlap_start + timedelta(minutes=event_duration)))
+        overlap_start += timedelta(minutes=10)  # Move to next interval
+
+    print("Common times found:", common_times)  # Debugging output
     return common_times
 
 def score_common_times(common_times, responses):
@@ -216,6 +236,7 @@ def best_time(event_id):
         return jsonify({"message": "No common available times found", "best_times": []}), 200
     
     scores = score_common_times(common_times, responses)
+    print(f"Scores: {scores}")  # Debugging output
     
     if scores:
         max_score = max(scores.values())
@@ -227,6 +248,10 @@ def best_time(event_id):
             for (start_time, end_time), score in scores.items()
             if score == max_score
         ]
+        
+        # Check best_times for validity
+        print(f"Best times before sorting: {best_times}")
+        
         best_times.sort(key=lambda x: x['time'])  # Sort by time
     else:
         best_times = []

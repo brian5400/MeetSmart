@@ -74,18 +74,21 @@ function EventPage() {
         
         <Grid item xs={12} sm={6}>
           <Card>
-            <CardContent>
-              <Typography variant="h5" align="center">Best Meeting Times</Typography>
-              {bestTimes && bestTimes.length > 0 ? (
-                bestTimes.map((timeObj, index) => (
-                  <Typography key={index} variant="h6" align="center">
-                    {new Date(timeObj.time).toLocaleString()} - Score: {timeObj.score}
-                  </Typography>
-                ))
-              ) : (
-                <Typography variant="h6" align="center">No available times</Typography>
-              )}
-            </CardContent>
+          <CardContent>
+            <Typography variant="h5" align="center">Best Meeting Times</Typography>
+            {bestTimes && bestTimes.length > 0 ? (
+              bestTimes.map((timeObj, index) => {
+               const [startTime, endTime] = timeObj.time.split('~');
+               return (
+                <Typography key={index} variant="h6" align="center">
+                    {new Date(startTime).toLocaleString()} - {new Date(endTime).toLocaleString()} - Score: {timeObj.score}
+                </Typography>
+              );
+             })
+           ) : (
+           <Typography variant="h6" align="center">No available times</Typography>
+           )}
+          </CardContent>
           </Card>
         </Grid>
       </Grid>
