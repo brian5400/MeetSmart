@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
@@ -26,6 +26,7 @@ function ResponseForm() {
   const [timePreference, setTimePreference] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const ref = useRef();
 
 console.log("client ID: ", process.env.REACT_APP_GOOGLE_CLIENT_ID);
 console.log("Test Variable: ", process.env.REACT_APP_TEST_VARIABLE);
@@ -125,27 +126,22 @@ console.log("Test Variable: ", process.env.REACT_APP_TEST_VARIABLE);
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleGoogleLogin = () => {
-    const authInstance = window.gapi.auth2.getAuthInstance();
-    if (authInstance) {
-      authInstance.signIn().then((googleUser) => {
-        const profile = googleUser.getBasicProfile();
-        const token = googleUser.getAuthResponse().access_token; // Get the access token
-
-        console.log('Google User:', profile);
-        // Send the token to your backend to fetch calendar data
-        fetchCalendarData(token);
-      }).catch((error) => {
-        if (error.error === 'popup_closed_by_user') {
-          console.warn('Login popup was closed before completion.');
-          setSnackbar({ open: true, message: 'Login was canceled. Please try again.', severity: 'warning' });
-        } else {
+  const handleGoogleLogin = async () => {
+    try {
+      const response = await GoogleLogin({
+        onSuccess: (credentialResponse) => {
+          const token = credentialResponse.credential; // Get the token
+          console.log('Google User Token:', token);
+          // Send the token to your backend to fetch calendar data
+          fetchCalendarData(token);
+        },
+        onError: (error) => {
           console.error('Google login error:', error);
           setSnackbar({ open: true, message: 'Error during Google login. Please try again.', severity: 'error' });
         }
       });
-    } else {
-      console.error('Google API not initialized');
+    } catch (error) {
+      console.error('Error during Google login:', error);
     }
   };
 
