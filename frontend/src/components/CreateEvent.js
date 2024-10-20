@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TextField, Button, Container, Typography } from '@mui/material';
+import { TextField, Button, Container, Typography, Paper, Grid } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -15,7 +15,7 @@ function CreateEvent() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     const eventData = {
       name: eventName,
       start_date: startDate ? startDate.toISOString().split('T')[0] : null,
@@ -25,7 +25,6 @@ function CreateEvent() {
     };
 
     try {
-      console.log('Sending request to create event...'); // Debug log
       const response = await fetch('http://localhost:5001/api/event/create', {
         method: 'POST',
         headers: {
@@ -39,65 +38,76 @@ function CreateEvent() {
       }
 
       const result = await response.json();
-      console.log('Event created:', result);
-
-      // Navigate to the event page after creating the event
-      console.log(`Navigating to /event/${result.event_id}`); // Debug log
       navigate(`/event/${result.event_id}`);
     } catch (error) {
       console.error('Error creating event:', error);
-      // Handle error (e.g., show error message to user)
     }
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Container maxWidth="sm">
-        <Typography variant="h2" align="center" gutterBottom>
-          Create Event
+    <Container maxWidth="md" className="home-container">
+      <Paper elevation={3} style={{ padding: '40px', marginTop: '40px' }}>
+        <Typography variant="h4" align="center" gutterBottom style={{ color: '#1976d2', fontWeight: 'bold' }}>
+          Create New Event
         </Typography>
         <form onSubmit={handleSubmit}>
-          <TextField
-            fullWidth
-            label="Event Name"
-            value={eventName}
-            onChange={(e) => setEventName(e.target.value)}
-            margin="normal"
-          />
-          <DatePicker
-            label="Start Date"
-            value={startDate}
-            onChange={(newValue) => setStartDate(newValue)}
-            renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
-          />
-          <DatePicker
-            label="End Date"
-            value={endDate}
-            onChange={(newValue) => setEndDate(newValue)}
-            renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
-          />
-          <TextField
-            fullWidth
-            label="Duration (minutes)"
-            type="number"
-            value={duration}
-            onChange={(e) => setDuration(e.target.value)}
-            margin="normal"
-          />
-          <TextField
-            fullWidth
-            label="Number of Participants"
-            type="number"
-            value={participants}
-            onChange={(e) => setParticipants(e.target.value)}
-            margin="normal"
-          />
-          <Button type="submit" variant="contained" color="primary" fullWidth>
-            Create Event
-          </Button>
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Event Name"
+                variant="outlined"
+                value={eventName}
+                onChange={(e) => setEventName(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                <DatePicker
+                  label="Start Date"
+                  value={startDate}
+                  onChange={(newValue) => setStartDate(newValue)}
+                  renderInput={(params) => <TextField {...params} fullWidth />}
+                />
+              </LocalizationProvider>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                <DatePicker
+                  label="End Date"
+                  value={endDate}
+                  onChange={(newValue) => setEndDate(newValue)}
+                  renderInput={(params) => <TextField {...params} fullWidth />}
+                />
+              </LocalizationProvider>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Duration (minutes)"
+                type="number"
+                value={duration}
+                onChange={(e) => setDuration(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Number of Participants"
+                type="number"
+                value={participants}
+                onChange={(e) => setParticipants(e.target.value)}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Button type="submit" variant="contained" color="primary" fullWidth size="large">
+                Create Event
+              </Button>
+            </Grid>
+          </Grid>
         </form>
-      </Container>
-    </LocalizationProvider>
+      </Paper>
+    </Container>
   );
 }
 

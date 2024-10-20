@@ -1,0 +1,19 @@
+@keyframes moveBackground {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+  
+  .home-container {
+    padding: 50px;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #e0f7fa 25%, #ffffff 25%, #ffffff 50%, #e0f7fa 50%, #e0f7fa 75%, #ffffff 75%, #ffffff);
+    background-size: 150% 150%;
+    animation: moveBackground 15s ease infinite;
+  }
