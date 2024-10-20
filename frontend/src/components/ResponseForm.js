@@ -27,6 +27,9 @@ function ResponseForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
+console.log("client ID: ", process.env.REACT_APP_GOOGLE_CLIENT_ID);
+console.log("Test Variable: ", process.env.REACT_APP_TEST_VARIABLE);
+
   useEffect(() => {
     const loadGoogleAPI = () => {
       if (window.gapi) {
