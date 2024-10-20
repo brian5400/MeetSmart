@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { TextField, Button, Container, Typography } from '@mui/material';
+import { TextField, Button, Container, Typography, CircularProgress } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -11,42 +11,34 @@ function CreateEvent() {
   const [endDate, setEndDate] = useState(null);
   const [duration, setDuration] = useState('');
   const [participants, setParticipants] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    const eventData = {
-      name: eventName,
-      start_date: startDate ? startDate.toISOString().split('T')[0] : null,
-      end_date: endDate ? endDate.toISOString().split('T')[0] : null,
-      duration: duration ? parseInt(duration) : null,
-      participants_count: participants ? parseInt(participants) : null
-    };
+    setIsLoading(true);
+    setError('');
+
+    if (!eventName || !startDate || !endDate || !duration || !participants) {
+      setError('Please fill in all fields');
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      console.log('Sending request to create event...'); // Debug log
-      const response = await fetch('http://localhost:5001/api/event/create', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(eventData),
-      });
+      // Here you would send the data to your backend
+      console.log('Event created:', { eventName, startDate, endDate, duration, participants });
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-
-      const result = await response.json();
-      console.log('Event created:', result);
-
-      // Navigate to the event page after creating the event
-      console.log(`Navigating to /event/${result.event_id}`); // Debug log
-      navigate(`/event/${result.event_id}`);
-    } catch (error) {
-      console.error('Error creating event:', error);
-      // Handle error (e.g., show error message to user)
+        const newEventId = Math.floor(Math.random() * 1000);
+      navigate(`/event/${newEventId}`);
+    } catch (err) {
+      setError('Failed to create event. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -56,6 +48,7 @@ function CreateEvent() {
         <Typography variant="h2" align="center" gutterBottom>
           Create Event
         </Typography>
+        {error && <Typography color="error">{error}</Typography>}
         <form onSubmit={handleSubmit}>
           <TextField
             fullWidth
@@ -92,8 +85,14 @@ function CreateEvent() {
             onChange={(e) => setParticipants(e.target.value)}
             margin="normal"
           />
-          <Button type="submit" variant="contained" color="primary" fullWidth>
-            Create Event
+          <Button 
+            type="submit" 
+            variant="contained" 
+            color="primary" 
+            fullWidth 
+            disabled={isLoading}
+          >
+            {isLoading ? <CircularProgress size={24} /> : 'Create Event'}
           </Button>
         </form>
       </Container>

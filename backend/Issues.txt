@@ -10,5 +10,10 @@ BACKEND LOGIC
 - available times doesn't account for the date that the times are available
 - 
 
+WEB HOSTING
+-----------------------------------------------------------------------------------------
+- using Vercel to host the web server
+
+
 
 

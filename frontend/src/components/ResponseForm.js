@@ -11,11 +11,12 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import DeleteIcon from '@mui/icons-material/Delete';
+import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
 
 function ResponseForm() {
   const { eventId } = useParams();
   const navigate = useNavigate();
-  const [eventName, setEventName] = useState(''); // Define state for eventName
+  const [eventName, setEventName] = useState('');
   const [answererName, setAnswererName] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   const [startTime, setStartTime] = useState(null);
@@ -26,22 +27,39 @@ function ResponseForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
 
-  // Fetch event details when the component mounts
   useEffect(() => {
-    const fetchEventDetails = async () => {
-      try {
-        const eventResponse = await fetch(`http://localhost:5001/api/event/${eventId}`);
-        const eventData = await eventResponse.json();
-        setEventName(eventData.name); // Set the event name
-        console.log('Fetched Event Name:', eventData.name); // Log the fetched event name
-      } catch (error) {
-        console.error('Error fetching event details:', error);
+    const loadGoogleAPI = () => {
+      if (window.gapi) {
+        window.gapi.load('client:auth2', () => {
+          window.gapi.auth2.init({
+            client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID, // Use the environment variable
+          }).then(() => {
+            console.log('Google API initialized');
+          }).catch((error) => {
+            console.error('Error initializing Google API:', error);
+          });
+        });
+      } else {
+        console.error('Google API script not loaded');
       }
     };
-
-    fetchEventDetails();
-  }, [eventId]); // Dependency array to run effect when eventId changes
-  console.log('Event Name:', eventName);
+  
+    const loadScript = (src, onLoad) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.async = true;
+      script.defer = true;
+      script.onload = onLoad;
+      document.body.appendChild(script);
+    };
+  
+    // Load the Google API script if not already loaded
+    if (!window.gapi) {
+      loadScript('https://apis.google.com/js/platform.js', loadGoogleAPI);
+    } else {
+      loadGoogleAPI();
+    }
+  }, [eventId]);  
 
   const handleAddAvailability = () => {
     if (selectedDate && startTime && endTime) {
@@ -60,63 +78,42 @@ function ResponseForm() {
     const newAvailabilities = availabilities.filter((_, i) => i !== index);
     setAvailabilities(newAvailabilities);
   };
-  const formatDate = (date) => {
-    const d = new Date(date);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  const formatTime = (date) => {
-    const d = new Date(date);
-    return d.toTimeString().split(' ')[0];
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!answererName || availabilities.length === 0 || !dayPreference || !timePreference) {
-        setSnackbar({ open: true, message: 'Please fill in all required fields', severity: 'error' });
-        return;
+      setSnackbar({ open: true, message: 'Please fill in all required fields', severity: 'error' });
+      return;
     }
 
     setIsSubmitting(true);
-    const formattedAvailabilities = availabilities.map(av => ({
-        date: formatDate(av.date),
-        startTime: `${formatDate(av.date)} ${formatTime(av.startTime)}`,
-        endTime: `${formatDate(av.date)} ${formatTime(av.endTime)}`
-    }));
-
     const responseData = {
-        event_id: eventId,
-        name: answererName,
-        availability: formattedAvailabilities,
-        preference_gap: 0,
-        preference_day: dayPreference,
-        preference_time: timePreference
+      event_id: eventId,
+      name: answererName,
+      availability: availabilities,
+      preference_gap: 0,
+      preference_day: dayPreference,
+      preference_time: timePreference
     };
 
-    console.log("Submitting response data:", responseData);  // Add this line for debugging
-
     try {
-        const response = await axios.post(`http://localhost:5001/api/response/submit`, responseData, {
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        setSnackbar({ open: true, message: 'Response submitted successfully', severity: 'success' });
-        
-        setTimeout(() => {
-            navigate(`/submitted/${eventId}`, { state: { submissionData: response.data } });
-        }, 1500);
+      const response = await axios.post(`http://localhost:5001/api/response/submit`, responseData, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      setSnackbar({ open: true, message: 'Response submitted successfully', severity: 'success' });
+      setTimeout(() => {
+        navigate(`/submitted/${eventId}`, { state: { submissionData: response.data } });
+      }, 1500);
     } catch (error) {
-        console.error('Submission error:', error);
-        setSnackbar({ open: true, message: 'Error submitting response. Please try again.', severity: 'error' });
+      console.error('Submission error:', error);
+      setSnackbar({ open: true, message: 'Error submitting response. Please try again.', severity: 'error' });
     } finally {
-        setIsSubmitting(false);
+      setIsSubmitting(false);
     }
-};
+  };
 
   const handleCloseSnackbar = (event, reason) => {
     if (reason === 'clickaway') {
@@ -125,14 +122,63 @@ function ResponseForm() {
     setSnackbar({ ...snackbar, open: false });
   };
 
+  const handleGoogleLogin = () => {
+    const authInstance = window.gapi.auth2.getAuthInstance();
+    if (authInstance) {
+      authInstance.signIn().then((googleUser) => {
+        const profile = googleUser.getBasicProfile();
+        const token = googleUser.getAuthResponse().access_token; // Get the access token
+
+        console.log('Google User:', profile);
+        // Send the token to your backend to fetch calendar data
+        fetchCalendarData(token);
+      }).catch((error) => {
+        if (error.error === 'popup_closed_by_user') {
+          console.warn('Login popup was closed before completion.');
+          setSnackbar({ open: true, message: 'Login was canceled. Please try again.', severity: 'warning' });
+        } else {
+          console.error('Google login error:', error);
+          setSnackbar({ open: true, message: 'Error during Google login. Please try again.', severity: 'error' });
+        }
+      });
+    } else {
+      console.error('Google API not initialized');
+    }
+  };
+
+  // Function to fetch calendar data
+  const fetchCalendarData = async (token) => {
+    try {
+      const response = await axios.get('http://localhost:5001/api/calendar', {
+        headers: {
+          Authorization: `Bearer ${token}`, // Send the token in the header
+        },
+      });
+      console.log('Calendar Data:', response.data);
+      // Handle the calendar data as needed
+    } catch (error) {
+      console.error('Error fetching calendar data:', error);
+    }
+  };
+
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Container>
-        <Typography variant="h4" gutterBottom>
-          Response Form for Event <strong>{eventName}</strong>
-          <br />
-          Event ID: {eventId}
-        </Typography>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Typography variant="h4" gutterBottom>
+            Response Form for Event <strong>{eventName}</strong>
+            <br />
+            Event ID: {eventId}
+          </Typography>
+          <Button 
+            variant="contained" 
+            color="primary" 
+            onClick={handleGoogleLogin} 
+            style={{ marginLeft: 'auto' }}
+          >
+            Login with Google
+          </Button>
+        </div>
         <form onSubmit={handleSubmit}>
           <TextField
             fullWidth

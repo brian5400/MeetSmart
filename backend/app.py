@@ -5,6 +5,9 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta, timezone
 from dateutil import parser
+from google.oauth2 import id_token
+from google.auth.transport import requests
+from googleapiclient.discovery import build
 
 load_dotenv()
 
@@ -258,6 +261,24 @@ def best_time(event_id):
 
     print(f"Best times found: {len(best_times)}")
     return jsonify({"best_times": best_times})
+
+@app.route('/api/calendar', methods=['GET'])
+def get_calendar_data():
+    token = request.headers.get('Authorization').split(' ')[1]  # Extract the token from the header
+    try:
+        # Verify the token
+        idinfo = id_token.verify_oauth2_token(token, requests.Request(), os.getenv('GOOGLE_CLIENT_ID'))
+
+        # If the token is valid, fetch calendar data
+        service = build('calendar', 'v3', credentials=token)  # Use the token to create a service
+        events_result = service.events().list(calendarId='primary', maxResults=10, singleEvents=True,
+                                              orderBy='startTime').execute()
+        events = events_result.get('items', [])
+
+        return jsonify(events), 200
+    except Exception as e:
+        print(f"Error fetching calendar data: {str(e)}")
+        return jsonify({"error": "Failed to fetch calendar data"}), 500
 
 if __name__ == '__main__':
     if not os.path.exists('instance'):
