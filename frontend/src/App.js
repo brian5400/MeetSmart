@@ -1,3 +1,4 @@
+// src/App.js
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -7,6 +8,7 @@ import CreateEvent from './components/CreateEvent';
 import EventPage from './components/EventPage';
 import ResponseForm from './components/ResponseForm';
 import SubmittedPage from './components/SubmittedPage';
+import { GoogleOAuthProvider } from "@react-oauth/google";
 
 const theme = createTheme();
 
@@ -24,18 +26,20 @@ function Home() {
 function App() {
   return (
     <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Router>
-        <div className="App">
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/create" element={<CreateEvent />} />
-            <Route path="/event/:eventId" element={<EventPage />} />
-            <Route path="event/response/:eventId" element={<ResponseForm />} />
-            <Route path="/submitted/:eventId" element={<SubmittedPage />} />
-          </Routes>
-        </div>
-      </Router>
+        <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+          <CssBaseline />
+          <Router>
+            <div className="App">
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/create" element={<CreateEvent />} />
+                <Route path="/event/:eventId" element={<EventPage />} />
+                <Route path="event/response/:eventId" element={<ResponseForm />} />
+                <Route path="/submitted/:eventId" element={<SubmittedPage />} />
+              </Routes>
+            </div>
+          </Router>
+        </GoogleOAuthProvider>
     </ThemeProvider>
   );
 }

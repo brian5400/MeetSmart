@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { 
-  Container, Typography, TextField, Button, List, ListItem, ListItemText, 
-  IconButton, Radio, RadioGroup, FormControlLabel, FormControl, FormLabel, 
+import {
+  Container, Typography, TextField, Button, List, ListItem, ListItemText,
+  IconButton, Radio, RadioGroup, FormControlLabel, FormControl, FormLabel,
   Snackbar, Alert
 } from '@mui/material';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
@@ -12,6 +12,7 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { GoogleOAuthProvider, GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from 'jwt-decode'; // Updated import
 
 function ResponseForm() {
   const { eventId } = useParams();
@@ -26,40 +27,7 @@ function ResponseForm() {
   const [timePreference, setTimePreference] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-
-  useEffect(() => {
-    const loadGoogleAPI = () => {
-      if (window.gapi) {
-        window.gapi.load('client:auth2', () => {
-          window.gapi.auth2.init({
-            client_id: process.env.REACT_APP_GOOGLE_CLIENT_ID, // Use the environment variable
-          }).then(() => {
-            console.log('Google API initialized');
-          }).catch((error) => {
-            console.error('Error initializing Google API:', error);
-          });
-        });
-      } else {
-        console.error('Google API script not loaded');
-      }
-    };
-  
-    const loadScript = (src, onLoad) => {
-      const script = document.createElement('script');
-      script.src = src;
-      script.async = true;
-      script.defer = true;
-      script.onload = onLoad;
-      document.body.appendChild(script);
-    };
-  
-    // Load the Google API script if not already loaded
-    if (!window.gapi) {
-      loadScript('https://apis.google.com/js/platform.js', loadGoogleAPI);
-    } else {
-      loadGoogleAPI();
-    }
-  }, [eventId]);  
+  const [googleUser, setGoogleUser] = useState(null);
 
   const handleAddAvailability = () => {
     if (selectedDate && startTime && endTime) {
@@ -69,8 +37,11 @@ function ResponseForm() {
         endTime: endTime,
       };
       setAvailabilities([...availabilities, newAvailability]);
+      setSelectedDate(null);
       setStartTime(null);
       setEndTime(null);
+    } else {
+      setSnackbar({ open: true, message: 'Please select date and times before adding availability.', severity: 'warning' });
     }
   };
 
@@ -102,7 +73,7 @@ function ResponseForm() {
           'Content-Type': 'application/json'
         }
       });
-      
+
       setSnackbar({ open: true, message: 'Response submitted successfully', severity: 'success' });
       setTimeout(() => {
         navigate(`/submitted/${eventId}`, { state: { submissionData: response.data } });
@@ -122,28 +93,25 @@ function ResponseForm() {
     setSnackbar({ ...snackbar, open: false });
   };
 
-  const handleGoogleLogin = () => {
-    const authInstance = window.gapi.auth2.getAuthInstance();
-    if (authInstance) {
-      authInstance.signIn().then((googleUser) => {
-        const profile = googleUser.getBasicProfile();
-        const token = googleUser.getAuthResponse().access_token; // Get the access token
-
-        console.log('Google User:', profile);
-        // Send the token to your backend to fetch calendar data
-        fetchCalendarData(token);
-      }).catch((error) => {
-        if (error.error === 'popup_closed_by_user') {
-          console.warn('Login popup was closed before completion.');
-          setSnackbar({ open: true, message: 'Login was canceled. Please try again.', severity: 'warning' });
-        } else {
-          console.error('Google login error:', error);
-          setSnackbar({ open: true, message: 'Error during Google login. Please try again.', severity: 'error' });
-        }
-      });
-    } else {
-      console.error('Google API not initialized');
+  // Handle Google Login Success
+  const handleGoogleSuccess = (credentialResponse) => {
+    try {
+      const decoded = jwtDecode(credentialResponse.credential); // Updated usage
+      console.log('Google User:', decoded);
+      setGoogleUser(decoded);
+      // You can also send the token to your backend if needed
+      fetchCalendarData(credentialResponse.credential);
+      setSnackbar({ open: true, message: 'Google login successful', severity: 'success' });
+    } catch (error) {
+      console.error('Error decoding Google credential:', error);
+      setSnackbar({ open: true, message: 'Error processing Google login.', severity: 'error' });
     }
+  };
+
+  // Handle Google Login Error
+  const handleGoogleError = () => {
+    console.error('Google login failed');
+    setSnackbar({ open: true, message: 'Google login failed. Please try again.', severity: 'error' });
   };
 
   // Function to fetch calendar data
@@ -158,118 +126,117 @@ function ResponseForm() {
       // Handle the calendar data as needed
     } catch (error) {
       console.error('Error fetching calendar data:', error);
+      setSnackbar({ open: true, message: 'Error fetching calendar data.', severity: 'error' });
     }
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Container>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="h4" gutterBottom>
-            Response Form for Event <strong>{eventName}</strong>
-            <br />
-            Event ID: {eventId}
-          </Typography>
-          <Button 
-            variant="contained" 
-            color="primary" 
-            onClick={handleGoogleLogin} 
-            style={{ marginLeft: 'auto' }}
-          >
-            Login with Google
-          </Button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          <TextField
-            fullWidth
-            label="Your Name"
-            value={answererName}
-            onChange={(e) => setAnswererName(e.target.value)}
-            margin="normal"
-            required
-          />
-          <DatePicker
-            label="Select Date"
-            value={selectedDate}
-            onChange={(newValue) => setSelectedDate(newValue)}
-            renderInput={(params) => <TextField {...params} fullWidth margin="normal" required />}
-          />
-          <TimePicker
-            label="Start Time"
-            value={startTime}
-            onChange={(newValue) => setStartTime(newValue)}
-            renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
-          />
-          <TimePicker
-            label="End Time"
-            value={endTime}
-            onChange={(newValue) => setEndTime(newValue)}
-            renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
-          />
-          <Button onClick={handleAddAvailability} variant="outlined" fullWidth style={{ marginTop: '10px' }}>
-            Add Availability
-          </Button>
-          <List>
-            {availabilities.map((availability, index) => (
-              <ListItem key={index}
-                secondaryAction={
-                  <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveAvailability(index)}>
-                    <DeleteIcon />
-                  </IconButton>
-                }
+      <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+          <Container>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="h4" gutterBottom>
+                Response Form for Event <strong>{eventName}</strong>
+                <br />
+                Event ID: {eventId}
+              </Typography>
+              <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+              />
+            </div>
+            <form onSubmit={handleSubmit}>
+              <TextField
+                  fullWidth
+                  label="Your Name"
+                  value={answererName}
+                  onChange={(e) => setAnswererName(e.target.value)}
+                  margin="normal"
+                  required
+              />
+              <DatePicker
+                  label="Select Date"
+                  value={selectedDate}
+                  onChange={(newValue) => setSelectedDate(newValue)}
+                  renderInput={(params) => <TextField {...params} fullWidth margin="normal" required />}
+              />
+              <TimePicker
+                  label="Start Time"
+                  value={startTime}
+                  onChange={(newValue) => setStartTime(newValue)}
+                  renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
+              />
+              <TimePicker
+                  label="End Time"
+                  value={endTime}
+                  onChange={(newValue) => setEndTime(newValue)}
+                  renderInput={(params) => <TextField {...params} fullWidth margin="normal" />}
+              />
+              <Button onClick={handleAddAvailability} variant="outlined" fullWidth style={{ marginTop: '10px' }}>
+                Add Availability
+              </Button>
+              <List>
+                {availabilities.map((availability, index) => (
+                    <ListItem key={index}
+                              secondaryAction={
+                                <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveAvailability(index)}>
+                                  <DeleteIcon />
+                                </IconButton>
+                              }
+                    >
+                      <ListItemText
+                          primary={`${new Date(availability.date).toLocaleDateString()} - ${new Date(availability.startTime).toLocaleTimeString()} to ${new Date(availability.endTime).toLocaleTimeString()}`}
+                      />
+                    </ListItem>
+                ))}
+              </List>
+
+              <FormControl component="fieldset" margin="normal">
+                <FormLabel component="legend">Day Preference</FormLabel>
+                <RadioGroup
+                    row
+                    value={dayPreference}
+                    onChange={(e) => setDayPreference(e.target.value)}
+                >
+                  <FormControlLabel value="weekdays" control={<Radio />} label="Weekdays" />
+                  <FormControlLabel value="weekends" control={<Radio />} label="Weekends" />
+                </RadioGroup>
+              </FormControl>
+
+              <FormControl component="fieldset" margin="normal">
+                <FormLabel component="legend">Time Preference</FormLabel>
+                <RadioGroup
+                    row
+                    value={timePreference}
+                    onChange={(e) => setTimePreference(e.target.value)}
+                >
+                  <FormControlLabel value="morning" control={<Radio />} label="Morning (6am-12pm)" />
+                  <FormControlLabel value="afternoon" control={<Radio />} label="Afternoon (12pm-5pm)" />
+                  <FormControlLabel value="evening" control={<Radio />} label="Evening (5pm-9pm)" />
+                  <FormControlLabel value="night" control={<Radio />} label="Night (9pm-2am)" />
+                </RadioGroup>
+              </FormControl>
+
+              <Button
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  style={{ marginTop: '20px' }}
+                  disabled={isSubmitting}
               >
-                <ListItemText
-                  primary={`${availability.date.toLocaleDateString()} - ${availability.startTime.toLocaleTimeString()} to ${availability.endTime.toLocaleTimeString()}`}
-                />
-              </ListItem>
-            ))}
-          </List>
+                {isSubmitting ? 'Submitting...' : 'Submit'}
+              </Button>
+            </form>
 
-          <FormControl component="fieldset" margin="normal">
-            <FormLabel component="legend">Day Preference</FormLabel>
-            <RadioGroup
-              row
-              value={dayPreference}
-              onChange={(e) => setDayPreference(e.target.value)}
-            >
-              <FormControlLabel value="weekdays" control={<Radio />} label="Weekdays" />
-              <FormControlLabel value="weekends" control={<Radio />} label="Weekends" />
-            </RadioGroup>
-          </FormControl>
-
-          <FormControl component="fieldset" margin="normal">
-            <FormLabel component="legend">Time Preference</FormLabel>
-            <RadioGroup
-              row
-              value={timePreference}
-              onChange={(e) => setTimePreference(e.target.value)}
-            >
-              <FormControlLabel value="morning" control={<Radio />} label="Morning (6am-12pm)" />
-              <FormControlLabel value="afternoon" control={<Radio />} label="Afternoon (12pm-5pm)" />
-              <FormControlLabel value="evening" control={<Radio />} label="Evening (5pm-9pm)" />
-              <FormControlLabel value="night" control={<Radio />} label="Night (9pm-2am)" />
-            </RadioGroup>
-          </FormControl>
-
-          <Button 
-            type="submit" 
-            variant="contained" 
-            color="primary" 
-            fullWidth 
-            style={{ marginTop: '20px' }}
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Submitting...' : 'Submit'}
-          </Button>
-        </form>
-
-        <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
-          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
-      </Container>
-    </LocalizationProvider>
+            <Snackbar open={snackbar.open} autoHideDuration={6000} onClose={handleCloseSnackbar}>
+              <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+                {snackbar.message}
+              </Alert>
+            </Snackbar>
+          </Container>
+        </LocalizationProvider>
+      </GoogleOAuthProvider>
   );
 }
 
