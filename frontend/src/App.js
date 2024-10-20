@@ -7,8 +7,9 @@ import CreateEvent from './components/CreateEvent';
 import EventPage from './components/EventPage';
 import ResponseForm from './components/ResponseForm';
 import SubmittedPage from './components/SubmittedPage';
-import logo from '/Users/junhohong/Documents/GitHub/MeetSmart/frontend/src/MeetSmart IMAGE.jpg'; // Adjust the path as necessary
+import logo from './MeetSmart IMAGE.jpg';
 import './Home.css';
+import {GoogleOAuthProvider} from "@react-oauth/google";
 
 const theme = createTheme();
 
@@ -119,6 +120,7 @@ function Home() {
 function App() {
   return (
     <ThemeProvider theme={theme}>
+      <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
       <CssBaseline />
       <Router>
         <div className="App">
@@ -131,6 +133,7 @@ function App() {
           </Routes>
         </div>
       </Router>
+      </GoogleOAuthProvider>
     </ThemeProvider>
   );
 }
