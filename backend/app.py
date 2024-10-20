@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 from datetime import datetime, timedelta, timezone
 from dateutil import parser
+from collections import defaultdict
 
 load_dotenv()
 
@@ -131,51 +132,42 @@ def get_responses(event_id):
         "response_count": response_count  # Return the count of responses
     })
 
+
 def find_common_availability(responses, event_duration):
-    if not responses:
+    if len(responses) < 2:
         return []
 
-    # Collect all available time slots from different users
-    all_slots = []
+    # Group slots by date and user
+    slots_by_date_and_user = defaultdict(lambda: defaultdict(list))
     for response in responses:
         for slot in response.availability:
             date = slot['date']
             start = datetime.strptime(f"{date} {slot['startTime']}", "%Y-%m-%d %H:%M:%S")
             end = datetime.strptime(f"{date} {slot['endTime']}", "%Y-%m-%d %H:%M:%S")
-            all_slots.append((start, end))
+            slots_by_date_and_user[date][response.id].append((start, end))
 
-    print("All slots:", all_slots)  # Debugging output
+    print("Slots by date and user:", dict(slots_by_date_and_user))  # Debugging output
 
     common_times = []
-    if not all_slots:
-        return common_times
 
-    # Sort all slots by start time
-    all_slots.sort(key=lambda x: x[0])
+    for date, user_slots in slots_by_date_and_user.items():
+        if len(user_slots) < len(responses):
+            continue  # Skip dates where not all users have availability
 
-    # Use a list to keep track of overlapping slots
-    overlap_start = all_slots[0][0]
-    overlap_end = all_slots[0][1]
+        # Find overlapping times across all users
+        overlaps = []
+        for user_id, slots in user_slots.items():
+            user_overlap = []
+            for start, end in slots:
+                current = start
+                while current + timedelta(minutes=event_duration) <= end:
+                    user_overlap.append((current, current + timedelta(minutes=event_duration)))
+                    current += timedelta(minutes=10)  # 10-minute intervals
+            overlaps.append(set(user_overlap))
 
-    for start, end in all_slots[1:]:
-        # Check if the current slot overlaps with the ongoing overlap
-        if start <= overlap_end:  # There is an overlap
-            overlap_start = max(overlap_start, start)  # Update the start of overlap
-            overlap_end = min(overlap_end, end)        # Update the end of overlap
-        else:
-            # When there's no overlap, check the current overlapping slot
-            while overlap_start + timedelta(minutes=event_duration) <= overlap_end:
-                common_times.append((overlap_start, overlap_start + timedelta(minutes=event_duration)))
-                overlap_start += timedelta(minutes=10)  # Move to next interval
-
-            # Move to the next interval
-            overlap_start = start
-            overlap_end = end
-
-    # Final check for the last overlapping slot
-    while overlap_start + timedelta(minutes=event_duration) <= overlap_end:
-        common_times.append((overlap_start, overlap_start + timedelta(minutes=event_duration)))
-        overlap_start += timedelta(minutes=10)  # Move to next interval
+        # Find common times across all users
+        common = set.intersection(*overlaps)
+        common_times.extend(list(common))
 
     print("Common times found:", common_times)  # Debugging output
     return common_times
@@ -186,9 +178,9 @@ def score_common_times(common_times, responses):
         score = 0
         for response in responses:
             # Day preference
-            if response.preference_day == "weekdays" and start_time.weekday() < 5:
+            if response.preference_day == "weekends" and start_time.weekday() >= 5:
                 score += 1
-            elif response.preference_day == "weekends" and start_time.weekday() >= 5:
+            elif response.preference_day == "weekdays" and start_time.weekday() < 5:
                 score += 1
 
             # Time preference
