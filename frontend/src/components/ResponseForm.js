@@ -155,6 +155,28 @@ function ResponseForm() {
               required
               variant="outlined"
             />
+
+            {/* New Google Calendar Sync Button */}
+            <Button 
+              variant="contained" 
+              style={{ 
+                backgroundColor: 'gold', 
+                color: 'black', 
+                marginTop: '20px', 
+                fontWeight: 'bold', 
+                border: '2px solid #f39c12', // Border effect
+                boxShadow: '0 0 10px #f39c12, 0 0 20px #f39c12', // Glowing effect
+                transition: 'box-shadow 0.2s ease',
+                '&:hover': { 
+                  boxShadow: '0 0 20px #f39c12, 0 0 30px #f39c12' // Stronger glow on hover
+                }
+              }} 
+              fullWidth
+              onClick={() => alert('Google Calendar Sync functionality will be implemented here')}
+            >
+              Google Calendar Sync
+              </Button>
+
             <Box display="flex" justifyContent="space-between" mt={3} mb={2}>
               <Typography variant="h6" style={{ color: '#1976d2' }}>
                 <CalendarTodayIcon style={{ verticalAlign: 'middle', marginRight: '10px' }} />
