@@ -1,0 +1,1 @@
+after we get the lost of common time, write another function that iterate through each common time and assign each time slot a score. The score is calculated based on preference time and preference of each response

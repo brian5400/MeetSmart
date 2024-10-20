@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { 
@@ -11,11 +11,11 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { id } from 'date-fns/locale';
 
 function ResponseForm() {
   const { eventId } = useParams();
   const navigate = useNavigate();
+  const [eventName, setEventName] = useState(''); // Define state for eventName
   const [answererName, setAnswererName] = useState('');
   const [selectedDate, setSelectedDate] = useState(null);
   const [startTime, setStartTime] = useState(null);
@@ -25,6 +25,23 @@ function ResponseForm() {
   const [timePreference, setTimePreference] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  // Fetch event details when the component mounts
+  useEffect(() => {
+    const fetchEventDetails = async () => {
+      try {
+        const eventResponse = await fetch(`http://localhost:5001/api/event/${eventId}`);
+        const eventData = await eventResponse.json();
+        setEventName(eventData.name); // Set the event name
+        console.log('Fetched Event Name:', eventData.name); // Log the fetched event name
+      } catch (error) {
+        console.error('Error fetching event details:', error);
+      }
+    };
+
+    fetchEventDetails();
+  }, [eventId]); // Dependency array to run effect when eventId changes
+  console.log('Event Name:', eventName);
 
   const handleAddAvailability = () => {
     if (selectedDate && startTime && endTime) {
@@ -70,7 +87,7 @@ function ResponseForm() {
       
       // Redirect to the submitted page after a short delay
       setTimeout(() => {
-        navigate(`/event/${eventId}`, { state: { submissionData: response.data } });
+        navigate(`/submitted/${eventId}`, { state: { submissionData: response.data } });
       }, 1500);
     } catch (error) {
       console.error('Submission error:', error);
@@ -91,7 +108,9 @@ function ResponseForm() {
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <Container>
         <Typography variant="h4" gutterBottom>
-          Response Form for Event {eventId}
+          Response Form for Event <strong>{eventName}</strong>
+          <br />
+          Event ID: {eventId}
         </Typography>
         <form onSubmit={handleSubmit}>
           <TextField

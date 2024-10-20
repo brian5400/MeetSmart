@@ -1,0 +1,14 @@
+FRONTEND DATA
+-----------------------------------------------------------------------------
+- currently each event can accept more than the maximum number of participants specified on creation
+    - i.e. 3 responses when participants = 2
+
+BACKEND LOGIC
+-------------------------------------------------------------------------------------
+- currently the only times being checked are the start and end times
+    - i.e. instead of check all times between start and end that can hold the meeting
+- available times doesn't account for the date that the times are available
+- 
+
+
+
